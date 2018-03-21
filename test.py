@@ -2,16 +2,6 @@ import tensorflow as tf
 import numpy as np
 
 
-def one_hot(shape, index):
-    ret = np.zeros(shape)
-    ret[index] = 1
-    return ret
-
-
-np.one_hot = one_hot
-del one_hot
-
-
 class Constant(object):
     class Board(object):
         ROW_SIZE = 6
@@ -24,9 +14,9 @@ class Constant(object):
             UNIT_SIZE = 128
 
         class Training(object):
-            RANDOM_CHOICE_PERCENTAGE = 0.1
+            RANDOM_CHOICE_PERCENTAGE = 0.05
             ONE_DATA_SET_GAME_NUMBER = 1000
-            EPOCHS = 10
+            EPOCHS = 5
 
     class Player(object):
         A = 0
@@ -47,11 +37,11 @@ def my_model():
 
     model.add(tf.keras.layers.Dense(
         units=Constant.Board.ROW_SIZE * Constant.Board.COL_SIZE,
-        activation='softmax',
+        activation='sigmoid',
     ))
     model.add(tf.keras.layers.Reshape(target_shape=(Constant.Board.ROW_SIZE, Constant.Board.COL_SIZE)))
-    model.compile(loss='categorical_crossentropy',
-                  optimizer=tf.keras.optimizers.Adam(lr=0.05))
+    model.compile(loss='binary_crossentropy',
+                  optimizer='Adam')
 
     return model
 
@@ -64,6 +54,7 @@ class Game(object):
                 self.board_log = list()
                 self.choice_log = list()
                 self.model_input_log = list()
+                self.model_output_log = list()
 
         def __init__(self):
             self.A = self.Player(Constant.Player.A)
@@ -166,6 +157,9 @@ class Game(object):
 
         self.current_player.model_input_log.append(model_input)
 
+        model_output = model.predict_on_batch(np.array([model_input]))[0]
+        self.current_player.model_output_log.append(model_output)
+
         if np.random.rand() < random_percentage:
             prediction = np.multiply(
                 np.random.rand(Constant.Board.ROW_SIZE, Constant.Board.COL_SIZE),
@@ -173,9 +167,10 @@ class Game(object):
             )
         else:
             prediction = np.multiply(
-                model.predict_on_batch(np.array([model_input]))[0],
+                model_output,
                 self.get_available_location(self.current_board),
             )
+        #print(prediction)
         location = np.unravel_index(prediction.argmax(), prediction.shape)
         return self.put_stone(location)
 
@@ -191,18 +186,21 @@ def get_episode_from_one_game(model):
         if winner != None:
             break
     loser = winner.next_player
-    x = loser.model_input_log
+    x = np.append(winner.model_input_log, loser.model_input_log, axis=0)
     y = list()
-    for board, choice in zip(loser.board_log, loser.choice_log):
-        temp_y = game.get_available_location(board) - \
-                 np.one_hot([Constant.Board.ROW_SIZE, Constant.Board.COL_SIZE], choice)
 
-        temp_y_sum = temp_y.sum()
-        if temp_y_sum == 0:
-            print(temp_y)
-            raise SystemExit
+    for board, choice, model_output in zip(winner.board_log, winner.choice_log,
+                                           winner.model_output_log):
+        temp_y = model_output
+        temp_y[choice] = 1
+        temp_y = np.multiply(temp_y, game.get_available_location(board))
+        y.append(temp_y)
 
-        temp_y = temp_y / temp_y_sum
+    for board, choice, model_output in zip(loser.board_log, loser.choice_log,
+                                           loser.model_output_log):
+        temp_y = model_output
+        temp_y[choice] = 0
+        temp_y = np.multiply(temp_y, game.get_available_location(board))
         y.append(temp_y)
 
     return x, y
@@ -255,11 +253,16 @@ def main():
     print('data set number')
     for _ in range(int(input())):
         train_one_data_set(model)
-        print(_)
+        print('iteration ', _)
         tf.keras.models.save_model(model=model, filepath=model_file_path)
         print('model saved')
 
     play_game_with_human(model)
 
 
-main()
+model = my_model()
+x = np.ones([1,6,6,3])
+y = np.zeros([1,6,6])
+y[0][3][3] = 1
+model.fit(x, y, epochs=1000)
+print(model.predict_on_batch(x))
