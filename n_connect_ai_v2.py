@@ -58,7 +58,6 @@ def my_model():
             units=Constant.Model.Dense.UNIT_SIZE,
             activation='relu',
         ))
-        #model.add(tf.keras.layers.Dropout(rate=Constant.Model.Dropout.RATE))
 
     model.add(tf.keras.layers.Dense(
         units=Constant.Board.ROW_SIZE * Constant.Board.COL_SIZE,
@@ -78,6 +77,7 @@ class Game(object):
                 self.value = value
                 self.board_log = list()
                 self.choice_log = list()
+                self.model_input_log = list()
 
         def __init__(self):
             self.A = self.Player(Constant.Player.A)
@@ -190,6 +190,7 @@ class Game(object):
 
         model_input = np.swapaxes(np.swapaxes(model_input, 0, 1), 1, 2)
 
+        self.current_player.model_input_log.append(model_input)
         prediction = np.multiply(
             model.predict_on_batch(np.array([model_input]))[0],
             self.get_available_location(self.current_board),
@@ -211,7 +212,8 @@ def play_one_game(model):
             #game.print_board()
             break
 
-    A_x = []
+    x = np.append(game.players.A.model_input_log, game.players.B.model_input_log, axis=0)
+
     A_y = []
     for board, choice in zip(game.players.A.board_log, game.players.A.choice_log):
         temp_A_y = np.one_hot([Constant.Board.ROW_SIZE, Constant.Board.COL_SIZE], choice)
@@ -227,28 +229,6 @@ def play_one_game(model):
         temp_A_y = temp_A_y / temp_A_y.sum()
         A_y.append(temp_A_y)
 
-    for i in range(len(game.players.A.board_log)):
-        temp_A_x = list()
-        for j in range(Constant.Model.input_turn_number):
-            if i - j >= 0:
-                temp_A_x.append(
-                    game.players.A.board_log[i - j][game.players.A]
-                )
-                temp_A_x.append(
-                    game.players.A.board_log[i - j][game.players.B]
-                )
-            else:
-                temp_A_x.append(
-                    np.zeros([Constant.Board.ROW_SIZE, Constant.Board.COL_SIZE])
-                )
-                temp_A_x.append(
-                    np.zeros([Constant.Board.ROW_SIZE, Constant.Board.COL_SIZE])
-                )
-
-        temp_A_x.append(np.full([Constant.Board.ROW_SIZE, Constant.Board.COL_SIZE], Constant.Player.A))
-        A_x.append(temp_A_x)
-
-    B_x = []
     B_y = []
     for board, choice in zip(game.players.B.board_log, game.players.B.choice_log):
         temp_B_y = np.one_hot([Constant.Board.ROW_SIZE, Constant.Board.COL_SIZE], choice)
@@ -264,28 +244,6 @@ def play_one_game(model):
         temp_B_y = temp_B_y / temp_B_y.sum()
         B_y.append(temp_B_y)
 
-    for i in range(len(game.players.B.board_log)):
-        temp_B_x = list()
-        for j in range(Constant.Model.input_turn_number):
-            if i - j >= 0:
-                temp_B_x.append(
-                    game.players.B.board_log[i - j][game.players.A]
-                )
-                temp_B_x.append(
-                    game.players.B.board_log[i - j][game.players.B]
-                )
-            else:
-                temp_B_x.append(
-                    np.zeros([Constant.Board.ROW_SIZE, Constant.Board.COL_SIZE])
-                )
-                temp_B_x.append(
-                    np.zeros([Constant.Board.ROW_SIZE, Constant.Board.COL_SIZE])
-                )
-
-        temp_B_x.append(np.full([Constant.Board.ROW_SIZE, Constant.Board.COL_SIZE], Constant.Player.B))
-        B_x.append(temp_B_x)
-
-    x = np.swapaxes(np.swapaxes(np.append(A_x, B_x, axis=0), 1, 2), 2, 3)
     y = np.append(A_y, B_y, axis=0)
 
     model.fit(x, y, verbose=0)
@@ -304,6 +262,50 @@ def play_game_with_human(model):
         game.put_stone(location=(row, col))
 
 
+def self_play(model_a, model_b):
+    game = Game()
+    while True:
+        winner = game.put_stone_by_model(model_a)
+        if winner != None:
+            break
+        winner = game.put_stone_by_model(model_b)
+        if winner != None:
+            break
+
+    if winner == game.players.A:
+        return model_a
+    elif winner == game.players.B:
+        return model_b
+    else:
+        return None
+
+
+def self_n_play(model_a, model_b, n):
+    model_a_win_number = 0
+    model_b_win_number = 0
+    draw_number = 0
+
+    for i in range(int(n/2)):
+        win_model = self_play(model_a, model_b)
+        if win_model == model_a:
+            model_a_win_number += 1
+        elif win_model == model_b:
+            model_b_win_number += 1
+        else:
+            draw_number += 1
+
+    for i in range(int(n/2)):
+        win_model = self_play(model_b, model_a)
+        if win_model == model_a:
+            model_a_win_number += 1
+        elif win_model == model_b:
+            model_b_win_number += 1
+        else:
+            draw_number += 1
+
+    return (model_a_win_number, model_b_win_number, draw_number)
+
+
 def main():
     print('initialize model?(y/n)')
     model_file_path = './saved_model/my_model.h5'
@@ -317,8 +319,10 @@ def main():
     for _ in range(int(input())):
         play_one_game(model)
 
-        if _ % 100 == 0:
+        if _ % 1000 == 0:
             print(_)
+            old_model = tf.keras.models.load_model(model_file_path)
+            print(self_n_play(model, old_model, 100))
             tf.keras.models.save_model(model=model, filepath=model_file_path)
             print('model saved')
 
