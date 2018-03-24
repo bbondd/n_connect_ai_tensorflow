@@ -194,7 +194,10 @@ def get_episode_from_one_game(model):
     for player in [winner, loser]:
         for board, choice, model_output in zip(player.board_log, player.choice_log, player.model_output_log):
             temp_y = model_output
-            temp_y[choice] += 1
+            if player == winner:
+                temp_y[choice] += 1
+            else:
+                temp_y[choice] -= 1
             temp_y -= (1 - game.get_available_location(board))
             y.append(temp_y)
 
