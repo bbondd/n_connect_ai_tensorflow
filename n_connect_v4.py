@@ -186,20 +186,15 @@ def get_episode_from_one_game(model):
         winner = game.put_stone_by_model(model, Constant.Model.Training.RANDOM_CHOICE_PERCENTAGE)
         if winner != None:
             break
-    loser = winner.next_player
 
-    x = np.append(winner.model_input_log, loser.model_input_log, axis=0)
+    x = winner.model_input_log
 
     y = list()
-    for player in [winner, loser]:
-        for board, choice, model_output in zip(player.board_log, player.choice_log, player.model_output_log):
-            temp_y = model_output
-            if player == winner:
-                temp_y[choice] += 1
-            else:
-                temp_y[choice] -= 1
-            temp_y -= (1 - game.get_available_location(board))
-            y.append(temp_y)
+    for board, choice, model_output in zip(winner.board_log, winner.choice_log, winner.model_output_log):
+        temp_y = model_output
+        temp_y[choice] += 1
+        temp_y -= (1 - game.get_available_location(board))
+        y.append(temp_y)
 
     return x, y
 
