@@ -169,7 +169,7 @@ class Game(object):
         else:
             prediction = np.multiply(
                 model_output,
-                self.get_available_location(self.current_board),
+                (1 - self.get_available_location(self.current_board)) * (-float('inf')),
             )
         #print(prediction)
         location = np.unravel_index(prediction.argmax(), prediction.shape)
