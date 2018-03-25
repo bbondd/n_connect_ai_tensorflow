@@ -9,6 +9,10 @@ class Constant(object):
         WIN_NUMBER = 4
 
     class Model(object):
+        class Reward(object):
+            WIN_REWARD = 100
+            LOSE_REWARD = -1
+
         class Dense(object):
             LAYER_SIZE = 16
             UNIT_SIZE = 128
@@ -162,15 +166,12 @@ class Game(object):
         self.current_player.model_output_log.append(model_output)
 
         if np.random.rand() < random_percentage:
-            prediction = np.multiply(
-                np.random.rand(Constant.Board.ROW_SIZE, Constant.Board.COL_SIZE),
-                self.get_available_location(self.current_board)
-            )
+            prediction = np.random.rand(Constant.Board.ROW_SIZE, Constant.Board.COL_SIZE)
         else:
-            prediction = np.multiply(
-                model_output,
-                (1 - self.get_available_location(self.current_board)) * (-float('inf')),
-            )
+            prediction = model_output
+
+        prediction += (self.get_available_location(self.current_board) - 1) * float('inf')
+
         #print(prediction)
         location = np.unravel_index(prediction.argmax(), prediction.shape)
         return self.put_stone(location)
@@ -195,10 +196,12 @@ def get_episode_from_one_game(model):
         for board, choice, model_output in zip(player.board_log, player.choice_log, player.model_output_log):
             temp_y = model_output
             if player == winner:
-                temp_y[choice] += 1
+                temp_y[choice] = Constant.Model.Reward.WIN_REWARD
             else:
-                temp_y[choice] -= 1
-            temp_y -= (1 - game.get_available_location(board))
+                temp_y[choice] = Constant.Model.Reward.LOSE_REWARD
+            temp_y *= (1 - game.get_available_location(board))
+            temp_y += (game.get_available_location(board) - 1)
+
             y.append(temp_y)
 
     return x, y
