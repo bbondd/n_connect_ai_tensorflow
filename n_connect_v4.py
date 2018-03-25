@@ -170,7 +170,7 @@ class Game(object):
         else:
             prediction = model_output
 
-        available_location = self.get_available_location(self.current_board)
+        available_location = self.get_available_location(self.current_board).astype('float')
         available_location[available_location == 0] = -float('inf')
         prediction += available_location
 
@@ -202,8 +202,8 @@ def get_episode_from_one_game(model):
             else:
                 temp_y[choice] = Constant.Model.Reward.LOSE_REWARD
 
-            temp_y *= (1 - game.get_available_location(board))
-            temp_y += (game.get_available_location(board) - 1)
+            temp_y *= 1 - game.get_available_location(board)
+            temp_y += game.get_available_location(board) - 1
 
             y.append(temp_y)
 
