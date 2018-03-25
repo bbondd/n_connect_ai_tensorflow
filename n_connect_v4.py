@@ -170,7 +170,9 @@ class Game(object):
         else:
             prediction = model_output
 
-        prediction += (self.get_available_location(self.current_board) - 1) * float('inf')
+        available_location = self.get_available_location(self.current_board)
+        available_location[available_location == 0] = -float('inf')
+        prediction += available_location
 
         #print(prediction)
         location = np.unravel_index(prediction.argmax(), prediction.shape)
@@ -199,6 +201,7 @@ def get_episode_from_one_game(model):
                 temp_y[choice] = Constant.Model.Reward.WIN_REWARD
             else:
                 temp_y[choice] = Constant.Model.Reward.LOSE_REWARD
+
             temp_y *= (1 - game.get_available_location(board))
             temp_y += (game.get_available_location(board) - 1)
 
